@@ -1,0 +1,119 @@
+-- Script Manager - Tentando integrar em Lua Scripts
+print("═══════════════════════════════════════════")
+print(" SCRIPT MANAGER - TESTING LUA SCRIPTS REF...")
+print("═══════════════════════════════════════════")
+
+-- Testar todas as variações possíveis de "Lua Scripts"
+local test_refs = {
+    "Lua Scripts",
+    "LUA SCRIPTS", 
+    "Lua",
+    "LUA",
+    "Scripts",
+    "SCRIPTS",
+    "lua scripts",
+    "lua_scripts",
+    "luascripts"
+}
+
+local menu_ref = nil
+
+for _, ref_name in ipairs(test_refs) do
+    local ok, ref = pcall(function()
+        return gui.Reference(ref_name)
+    end)
+    
+    if ok and ref then
+        menu_ref = ref
+        print("[Script Manager] ✓ SUCCESS with: '" .. ref_name .. "'")
+        break
+    else
+        print("[Script Manager] ✗ Failed: '" .. ref_name .. "'")
+    end
+end
+
+if not menu_ref then
+    print("═══════════════════════════════════════════")
+    print(" ERROR: 'Lua Scripts' is not a valid GUI reference")
+    print(" This is a file manager, not a config tab")
+    print(" Falling back to Misc menu...")
+    print("═══════════════════════════════════════════")
+    
+    -- Fallback para Misc
+    menu_ref = gui.Reference("Misc")
+end
+
+-- Criar groupbox sem título visível e mais à direita
+local groupbox = gui.Groupbox(menu_ref, "", 520, 460, 200, 50)
+local btnUnloadAll
+
+local function setStatus(msg)
+    print("[Script Manager] " .. tostring(msg))
+end
+
+local function normalize_path(p)
+    p = tostring(p or "")
+    p = p:gsub("\\", "/")
+    p = p:gsub("/+", "/")
+    return p
+end
+
+local function get_all_lua_files()
+    local items = {}
+    local seen = {}
+
+    pcall(function()
+        file.Enumerate(function(path)
+            path = normalize_path(path)
+            if type(path) == "string" and path:lower():sub(-4) == ".lua" then
+                local base = path:match("([^/]+)$") or path
+                -- Ignorar unload.lua
+                if base:lower() ~= "unload.lua" then
+                    if not seen[path] then
+                        seen[path] = true
+                        table.insert(items, path)
+                    end
+                end
+            end
+        end)
+    end)
+
+    return items
+end
+
+btnUnloadAll = gui.Button(groupbox, "Unload All Scripts", function()
+    print("═══════════════════════════════════════════")
+    print(" UNLOADING ALL SCRIPTS...")
+    print("═══════════════════════════════════════════")
+    
+    local scripts = get_all_lua_files()
+    local count = 0
+    local failed = 0
+    
+    for _, path in ipairs(scripts) do
+        local ok, err = pcall(function() UnloadScript(path) end)
+        if ok then
+            count = count + 1
+            print(" ✓ Unloaded: " .. path)
+        else
+            failed = failed + 1
+            print(" ✗ Failed: " .. path)
+        end
+    end
+    
+    print("═══════════════════════════════════════════")
+    if failed > 0 then
+        setStatus(string.format("Unloaded %d (%d failed)", count, failed))
+    else
+        setStatus(string.format("Unloaded %d scripts", count))
+    end
+    print("═══════════════════════════════════════════")
+end)
+
+btnUnloadAll:SetWidth(180)
+btnUnloadAll:SetPosX(10)
+btnUnloadAll:SetPosY(10)
+
+print("═══════════════════════════════════════════")
+print(" SCRIPT MANAGER - LOADED!")
+print("═══════════════════════════════════════════")
