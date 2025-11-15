@@ -1,0 +1,159 @@
+--[[
+    DYNAMIC FOV STANDALONE
+    CS2 Compatible v1.0 – 15/11/2025
+    • Distância REAL (GetAbsOrigin – funciona 100%)
+    • FOV dinâmico (rbot.fov) – muda com inimigo perto/longe
+    • HUD + console debug
+    • Funciona independente de qualquer outro script
+]]
+print("═══════════════════════════════════════════")
+print(" DYNAMIC FOV v1.0 – LOADING...")
+print("═══════════════════════════════════════════")
+
+-- ============ GUI ============
+-- Usando a aba Main do Ragebot
+local ref_rage = gui.Reference("Ragebot", "Main")
+
+local chk_enable = gui.Checkbox(ref_rage, "chk_dynfov_standalone", "Dynamic FOV", false)
+local sld_minfov = gui.Slider(ref_rage, "sld_dynfov_min", "Min FOV (close)", 5, 0, 180)
+local sld_maxfov = gui.Slider(ref_rage, "sld_dynfov_max", "Max FOV (far)", 26, 0, 180)
+local sld_close_dist = gui.Slider(ref_rage, "sld_dynfov_close", "Close Distance (units)", 500, 100, 2000)
+local sld_far_dist = gui.Slider(ref_rage, "sld_dynfov_far", "Far Distance (units)", 2000, 500, 5000)
+local chk_hud = gui.Checkbox(ref_rage, "chk_dynfov_hud", "Show HUD", true)
+
+-- ============ VARIABLES ============
+local last_fov_val = 0
+local tick = 0
+
+-- ============ UTILS ============
+local function calc_distance(pos1, pos2)
+    if not pos1 or not pos2 then return math.huge end
+    local dx = pos2.x - pos1.x
+    local dy = pos2.y - pos1.y
+    local dz = pos2.z - pos1.z
+    return math.sqrt(dx*dx + dy*dy + dz*dz)
+end
+
+-- ============ DYNAMIC FOV LOGIC ============
+callbacks.Register("CreateMove", function(cmd)
+    tick = tick + 1
+    
+    if not chk_enable:GetValue() then return end
+
+    local me = entities.GetLocalPlayer()
+    if not me or not me:IsAlive() then return end
+
+    local minf = sld_minfov:GetValue()
+    local maxf = sld_maxfov:GetValue()
+    local close_d = sld_close_dist:GetValue()
+    local far_d = sld_far_dist:GetValue()
+
+    local my_pos = me:GetAbsOrigin()
+    if not my_pos then return end
+
+    local closest = math.huge
+    local players = entities.FindByClass("CCSPlayerController")
+    
+    for i = 1, #players do
+        local p = players[i]
+        if p and p:GetTeamNumber() ~= me:GetTeamNumber() and p:IsAlive() and not p:IsDormant() then
+            local pos = p:GetAbsOrigin()
+            local d = calc_distance(my_pos, pos)
+            if d < closest then closest = d end
+        end
+    end
+
+    local fov
+    if closest == math.huge then
+        fov = minf
+    else
+        if closest <= close_d then 
+            fov = minf
+        elseif closest >= far_d then 
+            fov = maxf
+        else
+            local ratio = (closest - close_d) / (far_d - close_d)
+            fov = minf + (maxf - minf) * ratio
+        end
+    end
+    
+    fov = math.floor(fov + 0.5)
+
+    if fov ~= last_fov_val then
+        gui.SetValue("rbot.fov", fov)
+        last_fov_val = fov
+        
+        if tick % 30 == 0 then
+            if closest == math.huge then
+                print(string.format("[DYNFOV] No enemies | FOV: %d", fov))
+            else
+                print(string.format("[DYNFOV] Distance: %.1f u | FOV: %d [%d-%d]", closest, fov, minf, maxf))
+            end
+        end
+    end
+end)
+
+-- ============ DRAW (UI + HUD) ============
+callbacks.Register("Draw", function()
+    local en = chk_enable:GetValue()
+    
+    -- Mostrar/ocultar sliders
+    sld_minfov:SetInvisible(not en)
+    sld_maxfov:SetInvisible(not en)
+    sld_close_dist:SetInvisible(not en)
+    sld_far_dist:SetInvisible(not en)
+    chk_hud:SetInvisible(not en)
+    
+    -- HUD
+    if en and chk_hud:GetValue() then
+        local sw, sh = draw.GetScreenSize()
+        local me = entities.GetLocalPlayer()
+        if me and me:IsAlive() then
+            local my_pos = me:GetAbsOrigin()
+            if my_pos then
+                local closest = math.huge
+                local players = entities.FindByClass("CCSPlayerController")
+                
+                for i = 1, #players do
+                    local p = players[i]
+                    if p and p:GetTeamNumber() ~= me:GetTeamNumber() and p:IsAlive() and not p:IsDormant() then
+                        local pos = p:GetAbsOrigin()
+                        local d = calc_distance(my_pos, pos)
+                        if d < closest then closest = d end
+                    end
+                end
+                
+                if closest ~= math.huge then
+                    local cur = gui.GetValue("rbot.fov")
+                    local mn = sld_minfov:GetValue()
+                    local mx = sld_maxfov:GetValue()
+                    
+                    -- Texto do FOV
+                    draw.Color(0, 255, 100, 255)
+                    draw.Text(10, sh-60, string.format("DYNFOV: %.1f u | FOV: %d | [%d-%d]", closest, cur, mn, mx))
+                    
+                    -- Barra de progresso
+                    draw.Color(0, 100, 255, 100)
+                    draw.FilledRect(10, sh-35, 200, sh-25)
+                    
+                    local r = (cur - mn) / (mx - mn)
+                    draw.Color(0, 255, 100, 255)
+                    draw.FilledRect(10, sh-35, 10 + 190 * r, sh-25)
+                end
+            end
+        end
+    end
+end)
+
+-- ============ UNLOAD ============
+callbacks.Register("Unload", function()
+    print("═══════════════════════════════════════════")
+    print(" DYNAMIC FOV v1.0 – UNLOADED")
+    print("═══════════════════════════════════════════")
+end)
+
+print("═══════════════════════════════════════════")
+print(" DYNAMIC FOV v1.0 – LOADED!")
+print(" • Standalone - works independently")
+print(" • Check Ragebot > Anti-Aim tab")
+print("═══════════════════════════════════════════")
