@@ -19,11 +19,19 @@ local sld_minfov = gui.Slider(ref_rage, "sld_dynfov_min", "Min FOV (close)", 5, 
 local sld_maxfov = gui.Slider(ref_rage, "sld_dynfov_max", "Max FOV (far)", 26, 0, 180)
 local sld_close_dist = gui.Slider(ref_rage, "sld_dynfov_close", "Close Distance (units)", 500, 100, 2000)
 local sld_far_dist = gui.Slider(ref_rage, "sld_dynfov_far", "Far Distance (units)", 2000, 500, 5000)
+local sld_update_rate = gui.Slider(ref_rage, "sld_dynfov_rate", "Update Rate (ms)", 100, 50, 500)
 local chk_hud = gui.Checkbox(ref_rage, "chk_dynfov_hud", "Show HUD", true)
+local chk_show_stats = gui.Checkbox(ref_rage, "chk_dynfov_stats", "Show Performance Stats", false)
 
 -- ============ VARIABLES ============
 local last_fov_val = 0
 local tick = 0
+local last_calc_time = 0
+local cached_fov = 0
+local cached_distance = math.huge
+local calc_count = 0
+local calc_per_second = 0
+local last_stats_time = 0
 
 -- ============ UTILS ============
 local function calc_distance(pos1, pos2)
@@ -43,6 +51,26 @@ callbacks.Register("CreateMove", function(cmd)
     local me = entities.GetLocalPlayer()
     if not me or not me:IsAlive() then return end
 
+    local now = globals.RealTime()
+    local update_rate = sld_update_rate:GetValue() / 1000  -- Converter ms para segundos
+    
+    -- Throttle: só recalcula após o intervalo definido
+    if now - last_calc_time < update_rate then
+        -- Usa valor em cache
+        if cached_fov ~= 0 then
+            gui.SetValue("rbot.fov", cached_fov)
+        end
+        return
+    end
+    
+    -- Atualizar stats de performance
+    calc_count = calc_count + 1
+    if now - last_stats_time >= 1.0 then
+        calc_per_second = calc_count
+        calc_count = 0
+        last_stats_time = now
+    end
+
     local minf = sld_minfov:GetValue()
     local maxf = sld_maxfov:GetValue()
     local close_d = sld_close_dist:GetValue()
@@ -52,16 +80,20 @@ callbacks.Register("CreateMove", function(cmd)
     if not my_pos then return end
 
     local closest = math.huge
+    local enemy_count = 0
     local players = entities.FindByClass("CCSPlayerController")
     
     for i = 1, #players do
         local p = players[i]
         if p and p:GetTeamNumber() ~= me:GetTeamNumber() and p:IsAlive() and not p:IsDormant() then
+            enemy_count = enemy_count + 1
             local pos = p:GetAbsOrigin()
             local d = calc_distance(my_pos, pos)
             if d < closest then closest = d end
         end
     end
+
+    cached_distance = closest
 
     local fov
     if closest == math.huge then
@@ -78,6 +110,7 @@ callbacks.Register("CreateMove", function(cmd)
     end
     
     fov = math.floor(fov + 0.5)
+    cached_fov = fov
 
     if fov ~= last_fov_val then
         gui.SetValue("rbot.fov", fov)
@@ -85,12 +118,16 @@ callbacks.Register("CreateMove", function(cmd)
         
         if tick % 30 == 0 then
             if closest == math.huge then
-                print(string.format("[DYNFOV] No enemies | FOV: %d", fov))
+                print(string.format("[DYNFOV] No enemies | FOV: %d | Rate: %dms | Calc/s: %d", 
+                    fov, sld_update_rate:GetValue(), calc_per_second))
             else
-                print(string.format("[DYNFOV] Distance: %.1f u | FOV: %d [%d-%d]", closest, fov, minf, maxf))
+                print(string.format("[DYNFOV] Dist: %.1f u | FOV: %d [%d-%d] | Enemies: %d | Calc/s: %d", 
+                    closest, fov, minf, maxf, enemy_count, calc_per_second))
             end
         end
     end
+    
+    last_calc_time = now
 end)
 
 -- ============ DRAW (UI + HUD) ============
@@ -102,46 +139,64 @@ callbacks.Register("Draw", function()
     sld_maxfov:SetInvisible(not en)
     sld_close_dist:SetInvisible(not en)
     sld_far_dist:SetInvisible(not en)
+    sld_update_rate:SetInvisible(not en)
     chk_hud:SetInvisible(not en)
+    chk_show_stats:SetInvisible(not en)
     
     -- HUD
     if en and chk_hud:GetValue() then
         local sw, sh = draw.GetScreenSize()
         local me = entities.GetLocalPlayer()
         if me and me:IsAlive() then
-            local my_pos = me:GetAbsOrigin()
-            if my_pos then
-                local closest = math.huge
-                local players = entities.FindByClass("CCSPlayerController")
+            local closest = cached_distance
+            
+            if closest ~= math.huge then
+                local cur = gui.GetValue("rbot.fov")
+                local mn = sld_minfov:GetValue()
+                local mx = sld_maxfov:GetValue()
                 
-                for i = 1, #players do
-                    local p = players[i]
-                    if p and p:GetTeamNumber() ~= me:GetTeamNumber() and p:IsAlive() and not p:IsDormant() then
-                        local pos = p:GetAbsOrigin()
-                        local d = calc_distance(my_pos, pos)
-                        if d < closest then closest = d end
-                    end
-                end
+                -- Texto do FOV
+                draw.Color(0, 255, 100, 255)
+                draw.Text(10, sh-60, string.format("DYNFOV: %.1f u | FOV: %d | [%d-%d]", closest, cur, mn, mx))
                 
-                if closest ~= math.huge then
-                    local cur = gui.GetValue("rbot.fov")
-                    local mn = sld_minfov:GetValue()
-                    local mx = sld_maxfov:GetValue()
-                    
-                    -- Texto do FOV
-                    draw.Color(0, 255, 100, 255)
-                    draw.Text(10, sh-60, string.format("DYNFOV: %.1f u | FOV: %d | [%d-%d]", closest, cur, mn, mx))
-                    
-                    -- Barra de progresso
-                    draw.Color(0, 100, 255, 100)
-                    draw.FilledRect(10, sh-35, 200, sh-25)
-                    
+                -- Barra de progresso
+                draw.Color(0, 100, 255, 100)
+                draw.FilledRect(10, sh-35, 200, sh-25)
+                
+                if mx ~= mn then
                     local r = (cur - mn) / (mx - mn)
                     draw.Color(0, 255, 100, 255)
                     draw.FilledRect(10, sh-35, 10 + 190 * r, sh-25)
                 end
             end
         end
+    end
+    
+    -- Performance Stats
+    if en and chk_show_stats:GetValue() then
+        local sw, sh = draw.GetScreenSize()
+        local update_rate = sld_update_rate:GetValue()
+        
+        draw.Color(255, 200, 0, 255)
+        draw.Text(10, sh-100, string.format("Performance:"))
+        draw.Color(255, 255, 255, 200)
+        draw.Text(10, sh-85, string.format("  Update Rate: %dms (%.1f Hz)", update_rate, 1000/update_rate))
+        draw.Text(10, sh-70, string.format("  Calculations/sec: %d", calc_per_second))
+        
+        -- Indicador de eficiência
+        local efficiency = "Good"
+        local color = {0, 255, 0}
+        if calc_per_second > 30 then
+            efficiency = "High CPU"
+            color = {255, 200, 0}
+        end
+        if calc_per_second > 50 then
+            efficiency = "TOO HIGH!"
+            color = {255, 0, 0}
+        end
+        
+        draw.Color(color[1], color[2], color[3], 255)
+        draw.Text(10, sh-55, string.format("  Status: %s", efficiency))
     end
 end)
 
@@ -155,5 +210,6 @@ end)
 print("═══════════════════════════════════════════")
 print(" DYNAMIC FOV v1.0 – LOADED!")
 print(" • Standalone - works independently")
-print(" • Check Ragebot > Anti-Aim tab")
+print(" • Check Ragebot > Main tab")
+print(" • Performance optimized with throttle/cache")
 print("═══════════════════════════════════════════")
