@@ -1,0 +1,89 @@
+═══════════════════════════════════════════
+  AIMWARE V6 - CONFIRMED WORKING APIs
+═══════════════════════════════════════════
+
+🎮 TIME
+✅ globals.RealTime()
+✅ globals.CurTime()
+✅ globals.TickCount()
+
+🎨 GUI CREATION
+✅ gui.Window(id, title, x, y, width, height)
+✅ gui.Checkbox(parent, id, label, default)
+✅ gui.Slider(parent, id, label, default, min, max, step)
+✅ gui.Combobox(parent, id, label, default, opt1, opt2, ...)
+✅ gui.Keybox(parent, id, label, default_key)
+
+🔗 GUI REFERENCE
+✅ gui.Reference("Ragebot", "Main")
+✅ gui.Reference("Ragebot", "Anti-Aim")
+
+🎛️ GUI CONTROL
+✅ checkbox:GetValue()
+✅ checkbox:SetValue(value)
+✅ checkbox:SetInvisible(bool)
+✅ slider:GetValue()
+✅ slider:SetValue(value)
+
+⚙️ SETTINGS (GetValue/SetValue)
+✅ rbot.fov
+✅ rbot.antiaim.enabled
+✅ rbot.antiaim.pitch
+✅ rbot.antiaim.yaw
+✅ rbot.antiaim.use
+✅ rbot.accuracy
+
+🎮 ENTITIES
+✅ entities.GetLocalPlayer()
+✅ entities.FindByClass("CCSPlayerController")
+✅ entities.GetByIndex(index)
+
+👤 PLAYER METHODS
+✅ player:IsAlive()
+✅ player:IsDormant()
+✅ player:GetTeamNumber()
+✅ player:GetAbsOrigin() → {x, y, z}
+
+📍 CREATEOVE CALLBACK
+✅ cmd.sendpacket (boolean)
+✅ cmd.buttons (int bitmask)
+✅ cmd.forwardmove (float)
+✅ cmd.sidemove (float)
+✅ cmd.upmove (float)
+✅ cmd:GetViewAngles() → EulerAngles object
+✅ cmd:SetViewAngles(angles)
+
+📐 EULER ANGLES (from GetViewAngles)
+✅ angles.pitch (number)
+✅ angles.yaw (number)
+✅ angles.roll (number)
+
+🎨 DRAW
+✅ draw.Color(r, g, b, a)
+✅ draw.Text(x, y, text)
+✅ draw.FilledRect(x1, y1, x2, y2)
+✅ draw.OutlinedRect(x1, y1, x2, y2)
+✅ draw.GetScreenSize() → (width, height)
+✅ draw.Line(x1, y1, x2, y2)
+
+⌨️ INPUT
+✅ input.IsButtonDown(key)
+✅ input.IsButtonPressed(key)
+✅ input.GetMousePos()
+
+🔔 CALLBACKS
+✅ callbacks.Register("CreateMove", function(cmd))
+✅ callbacks.Register("Draw", function())
+✅ callbacks.Register("FireGameEvent", function(e))
+✅ callbacks.Register("Unload", function())
+
+🎪 CLIENT
+✅ client.AllowListener(event_name)
+✅ client.GetLocalPlayerIndex()
+
+🔢 BIT OPERATIONS
+✅ bit.band(a, b)
+✅ bit.bor(a, b)
+✅ bit.lshift(value, bits)
+
+═══════════════════════════════════════════
